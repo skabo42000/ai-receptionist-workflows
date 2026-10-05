@@ -1,0 +1,6 @@
+# Never upload secrets or working files with a deploy.
+.env*
+artifacts/
+scripts/
+vapi/
+n8n/

@@ -1,0 +1,150 @@
+{
+  "name": "Voice Agent - Check Availability",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-check-availability",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the UTC search window for Calendly's availability endpoint.\n// Accepts either a plain JSON body or Vapi's tool-call envelope ({ message: { toolCallList: [...] } }).\nconst raw = $json.body || {};\nconst msg = raw.message || {};\nconst call = (msg.toolCallList || msg.toolCalls || [])[0];\nlet args = call ? (call.arguments ?? call.parameters ?? call.function?.arguments ?? {}) : raw;\nif (typeof args === 'string') { try { args = JSON.parse(args); } catch (e) { args = {}; } }\nconst toolCallId = call?.id || null;\n\nconst EVENT_TYPE_URI = 'https://api.calendly.com/event_types/REPLACE_WITH_EVENT_TYPE_ID'; // Synq Logic - AI Voice Booking (Internal)\nconst BUSINESS_TIMEZONE = 'America/New_York';\nconst DAY = 24 * 60 * 60 * 1000;\n\n// An unknown timezone name from the caller would crash the formatter later, so fall back to the business default.\nlet callerTz = args.caller_timezone || BUSINESS_TIMEZONE;\ntry { new Intl.DateTimeFormat('en-US', { timeZone: callerTz }); } catch (e) { callerTz = BUSINESS_TIMEZONE; }\n\nconst now = new Date(Date.now() + 60 * 60 * 1000); // start 1 hour out so we never offer a slot that's already passed\nlet start = now;\n\n// Optional: the caller asks for a specific day (YYYY-MM-DD). Search from that day instead of from today.\nlet preferred = null;\nconst pd = String(args.preferred_date || '').trim();\nif (/^\\d{4}-\\d{2}-\\d{2}$/.test(pd)) {\n  const d = new Date(pd + 'T00:00:00Z');\n  if (!isNaN(d.getTime())) {\n    const s = new Date(d.getTime() - 14 * 3600 * 1000); // widen by 14h so any timezone's start of day is covered\n    if (s.getTime() > now.getTime()) start = s;\n    preferred = pd;\n  }\n}\nconst end = new Date(start.getTime() + 20 * DAY); // 20-day window, under Calendly's 31-day cap\n\nreturn [{\n  json: {\n    event_type: EVENT_TYPE_URI,\n    start_time: start.toISOString(),\n    end_time: end.toISOString(),\n    business_timezone: BUSINESS_TIMEZONE,\n    caller_timezone: callerTz,\n    preferred_date: preferred,\n    toolCallId,\n  },\n}];\n"
+      },
+      "id": "buildWindow",
+      "name": "Build search window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.calendly.com/event_type_available_times",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "event_type",
+              "value": "={{ $json.event_type }}"
+            },
+            {
+              "name": "start_time",
+              "value": "={{ $json.start_time }}"
+            },
+            {
+              "name": "end_time",
+              "value": "={{ $json.end_time }}"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "getAvailability",
+      "name": "GET availability",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turn Calendly's raw slot list into a few speakable options SPREAD ACROSS DIFFERENT DAYS,\n// so the agent can offer real variety instead of three back-to-back slots on one day.\nconst ctx = $('Build search window').first().json;\nconst tz = ctx.caller_timezone;\nconst collection = $input.first().json.collection || [];\nconst available = collection.filter((s) => s.status === 'available');\n\nconst dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });\nconst spokenFmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });\nconst dayFmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' });\n\n// Group open slots by the caller's local calendar day.\nconst byDay = new Map();\nfor (const s of available) {\n  const key = dayKey.format(new Date(s.start_time));\n  if (ctx.preferred_date && key < ctx.preferred_date) continue; // only days on/after the requested date\n  if (!byDay.has(key)) byDay.set(key, []);\n  byDay.get(key).push(s);\n}\nconst days = [...byDay.keys()].sort();\n\n// Up to 3 different days; on each day offer the first slot plus a later one (at least 3 hours apart) for variety.\nconst picked = [];\nfor (const key of days.slice(0, 3)) {\n  const list = byDay.get(key);\n  const first = list[0];\n  const later = list.find((s) => new Date(s.start_time) - new Date(first.start_time) >= 3 * 3600 * 1000) || list[1];\n  picked.push(first);\n  if (later && later !== first) picked.push(later);\n}\n\nconst slots = picked.map((s) => ({\n  start_time: s.start_time, // UTC ISO string - pass this back verbatim when booking\n  spoken: spokenFmt.format(new Date(s.start_time)),\n  date: dayKey.format(new Date(s.start_time)),\n}));\n\nconst searchedThrough = dayFmt.format(new Date(ctx.end_time));\nconst moreDays = days.length > 3;\n\nreturn [{\n  json: {\n    ok: slots.length > 0,\n    message: slots.length\n      ? `Found openings on ${Math.min(days.length, 3)} different day${Math.min(days.length, 3) > 1 ? 's' : ''}${moreDays ? ', and there are more open days after these' : ''}. Searched through ${searchedThrough}. If none suit the caller, ask which day they prefer and call this again with preferred_date (YYYY-MM-DD).`\n      : `No open times found through ${searchedThrough}. Offer to check a later date with preferred_date, or take a callback request instead.`,\n    searched_through: searchedThrough,\n    more_days_available: moreDays,\n    slots,\n  },\n}];\n"
+      },
+      "id": "formatSlots",
+      "name": "Format for speech",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => { const id = $('Build search window').first().json.toolCallId; const out = $json; return id ? { results: [{ toolCallId: id, result: JSON.stringify(out) }] } : out; })() }}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build search window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build search window": {
+      "main": [
+        [
+          {
+            "node": "GET availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET availability": {
+      "main": [
+        [
+          {
+            "node": "Format for speech",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for speech": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "availableInMCP": false,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveExecutionProgress": false
+  }
+}

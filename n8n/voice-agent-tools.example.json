@@ -1,0 +1,77 @@
+{
+  "_comment": "Paste these two tool/function definitions into your voice platform (Vapi or Retell). Both send POST requests with the X-Agent-Auth header, which the n8n webhooks require (requests without it get 403). Prefer storing the header value in the platform's credential/secret store rather than pasting it into a shared or committed file.",
+  "check_availability": {
+    "name": "check_availability",
+    "description": "Look up the next available appointment slots on the calendar. Call this before offering any specific time to the caller.",
+    "url": "https://YOUR_N8N_HOST/webhook/voice-check-availability",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Agent-Auth": "REPLACE_WITH_YOUR_WEBHOOK_SECRET"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "caller_timezone": {
+          "type": "string",
+          "description": "The caller's IANA timezone if known (e.g. 'America/Los_Angeles'). Omit if unknown; the business's default timezone will be used."
+        },
+        "preferred_date": {
+          "type": "string",
+          "description": "Optional. Only when the caller wants a specific day or week: the earliest date they want, as YYYY-MM-DD (for example '2026-10-12'). Work it out from the current date. Omit to see the earliest openings."
+        }
+      },
+      "required": []
+    }
+  },
+  "book_appointment": {
+    "name": "book_appointment",
+    "description": "Book the appointment on the calendar. Only call this after the caller has verbally confirmed their name, their email spelled back to them, their callback phone number, their company website (or that they have none), and the exact time slot from check_availability.",
+    "url": "https://YOUR_N8N_HOST/webhook/voice-book-appointment",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Agent-Auth": "REPLACE_WITH_YOUR_WEBHOOK_SECRET"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Caller's full name, exactly as confirmed verbally."
+        },
+        "email": {
+          "type": "string",
+          "description": "Caller's email address, exactly as spelled back and confirmed."
+        },
+        "phone_number": {
+          "type": "string",
+          "description": "Caller's phone number in E.164 format (e.g. '+15551234567'), including country code. The team will call this number, so confirm it carefully before including it."
+        },
+        "company_website": {
+          "type": "string",
+          "description": "The caller's company website as they said it (e.g. 'acme dot com' becomes 'acme.com'). If they have no website, pass 'N/A'. This field is required by the calendar and must not be empty."
+        },
+        "start_time": {
+          "type": "string",
+          "description": "The exact 'start_time' value (UTC ISO 8601) copied from the slot the caller chose in check_availability. Never invent or reformat this value."
+        },
+        "timezone": {
+          "type": "string",
+          "description": "The caller's IANA timezone, same value passed to check_availability."
+        },
+        "call_id": {
+          "type": "string",
+          "description": "The current call's unique ID, used to prevent duplicate bookings if this tool is called twice."
+        }
+      },
+      "required": [
+        "name",
+        "email",
+        "phone_number",
+        "company_website",
+        "start_time"
+      ]
+    }
+  }
+}

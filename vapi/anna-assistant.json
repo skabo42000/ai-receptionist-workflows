@@ -1,0 +1,58 @@
+{
+  "name": "Anna - Synq demo website",
+  "firstMessage": "Hi, I'm Ahna, Synq Logic's AI receptionist. This call may be recorded. I can tell you what we build for businesses like yours, or show you how I'd answer your customers. Which would you like?",
+  "firstMessageMode": "assistant-speaks-first",
+  "model": {
+    "provider": "openai",
+    "model": "REPLACE_WITH_SUPPORTED_MODEL"
+  },
+  "voice": {
+    "provider": "vapi",
+    "voiceId": "Leah",
+    "version": "2",
+    "chunkPlan": {
+      "formatPlan": {
+        "replacements": [
+          {
+            "type": "exact",
+            "key": "Anna",
+            "value": "Ahna",
+            "replaceAllEnabled": true
+          }
+        ]
+      }
+    }
+  },
+  "startSpeakingPlan": {
+    "waitSeconds": 0.6,
+    "smartEndpointingPlan": {
+      "provider": "livekit"
+    }
+  },
+  "stopSpeakingPlan": {
+    "numWords": 2,
+    "voiceSeconds": 0.3,
+    "backoffSeconds": 1.5
+  },
+  "transcriber": {
+    "provider": "soniox",
+    "model": "stt-rt-v5",
+    "language": "en",
+    "fallbackPlan": {
+      "autoFallback": {
+        "enabled": true
+      }
+    }
+  },
+  "maxDurationSeconds": 180,
+  "silenceTimeoutSeconds": 30,
+  "backgroundDenoisingEnabled": true,
+  "endCallFunctionEnabled": true,
+  "endCallMessage": "Thanks for trying our demo. Have a wonderful day!",
+  "serverMessages": [
+    "end-of-call-report"
+  ],
+  "metadata": {
+    "purpose": "Synq Logic demo website receptionist (browser calls only, no phone number)"
+  }
+}

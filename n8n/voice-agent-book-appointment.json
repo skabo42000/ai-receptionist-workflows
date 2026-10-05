@@ -1,0 +1,206 @@
+{
+  "name": "Voice Agent - Book Appointment",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-book-appointment",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate inputs before we ever touch the Calendly API.\n// A voice AI can mishear a name, email or phone number, so we fail fast with a message it can read back and ask the caller to confirm again.\n// Accepts either a plain JSON body or Vapi's tool-call envelope ({ message: { toolCallList: [...] } }).\nconst raw = $json.body || {};\nconst msg = raw.message || {};\nconst call = (msg.toolCallList || msg.toolCalls || [])[0];\nlet b = call ? (call.arguments ?? call.parameters ?? call.function?.arguments ?? {}) : raw;\nif (typeof b === 'string') { try { b = JSON.parse(b); } catch (e) { b = {}; } }\nconst toolCallId = call?.id || null;\nconst name = (b.name || '').trim();\nconst email = (b.email || '').trim().toLowerCase();\nconst start_time = (b.start_time || '').trim();\nconst timezone = (b.timezone || 'America/New_York').trim();\nconst phone_number = (b.phone_number || '').trim();\nconst company_website = (b.company_website || '').trim().slice(0, 200); // Calendly requires this answer to be non-blank; pass 'N/A' if the caller has none\nconst call_id = String(b.call_id || msg.call?.id || '').trim();\n\nconst emailOk = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\nconst isoOk = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$/.test(start_time);\n// E.164: + followed by 8-15 digits. The voice platform should normalize to this before calling us.\nconst phoneOk = /^\\+[1-9]\\d{7,14}$/.test(phone_number);\nconst websiteOk = company_website.length > 0;\n\nif (!name || !emailOk || !isoOk || !phoneOk || !websiteOk) {\n  return [{\n    json: {\n      valid: false,\n      ok: false,\n      toolCallId,\n      message: !emailOk\n        ? \"That email doesn't look right. Please spell it out letter by letter and I'll try again.\"\n        : !phoneOk\n        ? 'I need a valid phone number to call you back at, including the area code. Could you repeat it?'\n        : !websiteOk\n        ? \"I also need your company website. If you don't have one, just say so and I'll note that.\"\n        : !isoOk\n        ? 'That time was not recognized. Please re-check availability and pick one of the offered slots.'\n        : 'I need your full name to book this. Could you repeat it?',\n    },\n  }];\n}\n\nreturn [{ json: { valid: true, name, email, start_time, timezone, phone_number, company_website, call_id, toolCallId } }];\n"
+      },
+      "id": "validate",
+      "name": "Validate input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "ifValid",
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.calendly.com/invitees",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  event_type: 'https://api.calendly.com/event_types/REPLACE_WITH_EVENT_TYPE_ID',\n  start_time: $json.start_time,\n  invitee: {\n    name: $json.name,\n    email: $json.email,\n    timezone: $json.timezone\n  },\n  location: {\n    kind: 'outbound_call',\n    location: $json.phone_number\n  },\n  questions_and_answers: [\n    { question: 'Phone Number', answer: $json.phone_number, position: 0 },\n    { question: 'Company Website URL', answer: $json.company_website, position: 1 }\n  ]\n} }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "postInvitee",
+      "name": "POST invitee (book)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calendly returned - map its response into something the voice AI can say out loud.\nconst res = $input.first().json;\nconst status = res.statusCode;\nconst body = res.body || {};\nconst detail = body.message || body.title || '';\n\nif (status >= 200 && status < 300) {\n  return [{\n    json: {\n      ok: true,\n      message: 'Booked successfully. A confirmation email is on its way.',\n      cancel_url: body.resource?.cancel_url || body.cancel_url,\n      reschedule_url: body.resource?.reschedule_url || body.reschedule_url,\n      event: body.resource?.event || body.event,\n    },\n  }];\n}\n\n// Only call it a taken slot when Calendly actually says so. A blanket 400 = slot taken guess hid a real form error before.\nconst slotGone = status === 409 || ((status === 400 || status === 404) && /not available|no longer|unavailable|already|slot/i.test(detail));\n\nif (slotGone) {\n  return [{ json: { ok: false, retryable: true, status, detail, message: \"That time just became unavailable. Let's check availability again and pick another slot.\" } }];\n}\n\nreturn [{\n  json: {\n    ok: false,\n    retryable: false,\n    status,\n    detail,\n    message: \"I couldn't complete the booking due to a technical issue. I'll take your details and have someone follow up.\",\n  },\n}];\n"
+      },
+      "id": "formatBookingResult",
+      "name": "Format result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => { const id = $('Validate input').first().json.toolCallId; const out = $json; return id ? { results: [{ toolCallId: id, result: JSON.stringify(out) }] } : out; })() }}",
+        "options": {}
+      },
+      "id": "respondOk",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => { const { toolCallId, valid, ...out } = $json; return toolCallId ? { results: [{ toolCallId, result: JSON.stringify(out) }] } : $json; })() }}",
+        "options": {}
+      },
+      "id": "respondInvalid",
+      "name": "Respond (invalid input)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        80
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate input": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "POST invitee (book)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond (invalid input)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST invitee (book)": {
+      "main": [
+        [
+          {
+            "node": "Format result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format result": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "availableInMCP": false,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveExecutionProgress": false
+  }
+}

@@ -1,0 +1,266 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../styles/shadcn.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument), "Iowan Old Style", Georgia, serif;
+  --font-heading: var(--font-serif);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-inverse: var(--brand-inverse);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Ivory (light). The accent ("brand") comes in a light and a dark variant so the
+   "Make it yours" customizer can set both at once on <html>. */
+:root {
+  --brand-light: #866a42;
+  --brand-dark: #c2a57a;
+  --brand: var(--brand-light);
+  /* Accent for inverted panels (ink panels on Ivory pages, ivory panels on Ink pages). */
+  --brand-inverse: var(--brand-dark);
+  --brand-foreground: #fbf8f3;
+
+  --background: #f7f3ec;
+  --foreground: #1a1714;
+  --card: #fbf8f3;
+  --card-foreground: #1a1714;
+  --popover: #fbf8f3;
+  --popover-foreground: #1a1714;
+  --primary: #1a1714;
+  --primary-foreground: #f7f3ec;
+  --secondary: #efe9df;
+  --secondary-foreground: #1a1714;
+  --muted: #efe9df;
+  --muted-foreground: #6b645b;
+  --accent: #efe9df;
+  --accent-foreground: #1a1714;
+  --destructive: #a63d32;
+  --border: #e4ddd1;
+  --input: #d9d0c1;
+  --ring: var(--brand);
+  --radius: 0.25rem;
+  --shadow-paper: 0 1px 0 rgb(26 23 20 / 0.025), 0 24px 48px -30px rgb(26 23 20 / 0.16);
+}
+
+/* Ink (dark) */
+.dark {
+  --brand: var(--brand-dark);
+  --brand-inverse: var(--brand-light);
+  --brand-foreground: #12100e;
+
+  --background: #12100e;
+  --foreground: #efe9df;
+  --card: #1b1815;
+  --card-foreground: #efe9df;
+  --popover: #1b1815;
+  --popover-foreground: #efe9df;
+  --primary: #efe9df;
+  --primary-foreground: #12100e;
+  --secondary: #24201c;
+  --secondary-foreground: #efe9df;
+  --muted: #24201c;
+  --muted-foreground: #a39a8d;
+  --accent: #24201c;
+  --accent-foreground: #efe9df;
+  --destructive: #e08a7f;
+  --border: #2e2a25;
+  --input: #3a352f;
+  --shadow-paper: 0 1px 0 rgb(0 0 0 / 0.3), 0 30px 60px -30px rgb(0 0 0 / 0.7);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    scroll-padding-top: 6rem;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--brand) 28%, transparent);
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .container-editorial {
+    @apply mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-12;
+  }
+  .eyebrow {
+    @apply text-[0.68rem] font-medium tracking-[0.24em] text-muted-foreground uppercase;
+  }
+  .font-display {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    letter-spacing: -0.015em;
+  }
+  .paper {
+    @apply border bg-card text-card-foreground;
+    box-shadow: var(--shadow-paper);
+  }
+}
+
+/* One shared warm grade so photos from different photographers sit together on ivory and ink. */
+.photo-grade {
+  filter: sepia(0.2) saturate(0.7) contrast(0.94) brightness(1.025);
+}
+.dark .photo-grade {
+  filter: sepia(0.2) saturate(0.65) contrast(0.94) brightness(0.88);
+}
+
+.photo-tone {
+  background: linear-gradient(145deg, rgb(223 207 178 / 0.08), rgb(110 86 57 / 0.14));
+  mix-blend-mode: multiply;
+}
+
+/* The receptionist keeps its own ink palette in both page themes. All shared
+   controls inherit these tokens, including visitor-selected accent colors. */
+.receptionist-stage {
+  --background: #191613;
+  --foreground: #efe9df;
+  --card: #211d18;
+  --card-foreground: #efe9df;
+  --muted: #2c2620;
+  --muted-foreground: #b8afa3;
+  --border: #3b332b;
+  --primary: #efe9df;
+  --primary-foreground: #191613;
+  --brand: var(--brand-dark);
+  --brand-foreground: #191613;
+  --ring: var(--brand-dark);
+  color-scheme: dark;
+  background: radial-gradient(ellipse at 82% 35%, color-mix(in oklch, var(--brand-dark) 12%, transparent), transparent 54%), var(--background);
+  color: var(--foreground);
+}
+.receptionist-stage .photo-grade {
+  filter: sepia(0.2) saturate(0.65) contrast(0.94) brightness(0.88);
+}
+
+.demo-ribbon {
+  background: #1a1714;
+  color: #efe9df;
+}
+.dark .demo-ribbon {
+  background: #1b1815;
+  border-bottom: 1px solid #2e2a25;
+}
+
+.hero-headline {
+  font-size: clamp(2.15rem, 9.8vw, 3.5rem);
+}
+@media (min-width: 640px) {
+  .hero-headline { font-size: 4.5rem; }
+}
+@media (min-width: 1024px) {
+  .hero-headline { font-size: 5.6rem; }
+}
+@media (min-width: 1280px) {
+  .hero-headline { font-size: 6.2rem; }
+}
+
+/* A barely-there paper grain over the whole page. */
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.025;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.dark .grain::before {
+  mix-blend-mode: screen;
+  opacity: 0.025;
+}
+
+@keyframes soft-ping {
+  0% { transform: scale(1); opacity: 0.55; }
+  80%, 100% { transform: scale(2.4); opacity: 0; }
+}
+.animate-soft-ping {
+  animation: soft-ping 2.2s var(--ease-editorial) infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.035); }
+}
+.animate-breathe {
+  animation: breathe 5s ease-in-out infinite;
+}
+
+/* Hero entrance runs in CSS (no JavaScript needed), so the headline paints immediately. */
+@keyframes word-rise {
+  from { transform: translateY(108%); }
+  to { transform: none; }
+}
+.word-rise {
+  display: inline-block;
+  animation: word-rise 1.05s var(--ease-editorial) both;
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-up {
+  animation: fade-up 0.9s var(--ease-editorial) both;
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+.spin-slow {
+  animation: spin-slow 18s linear infinite;
+}
+
+@keyframes drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+.drift {
+  animation: drift 8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-soft-ping, .animate-breathe, .word-rise, .fade-up, .drift, .spin-slow { animation: none; }
+}
