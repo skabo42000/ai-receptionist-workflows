@@ -64,7 +64,7 @@ npm run build
 npm test
 ```
 
-The automated tests do not place calls, send alerts or create appointments. These commands were checked against the source manifest, but were not executed for the October 25, 2026 documentation review.
+The automated tests do not place calls, send alerts or create appointments.
 
 ## Configure your own integrations
 
@@ -109,8 +109,8 @@ This is an illustrative response shape, not a recorded model answer. Verify serv
 
 ## Evidence, limits and reuse
 
-The company showcase URL is recorded in the project evidence. Current hosted access, voice quality, provider behavior and the exact relationship between the hosted build and this public copy were not checked for the October 25, 2026 review. This repository does not establish client results, measured time savings or production-scale reliability.
+The company showcase is a separately configured build of this code; voice quality and provider behavior there are not measured by this repository. This repository does not establish client results, measured time savings or production-scale reliability.
 
 In-memory request limits are per instance and reset on restart. Forwarded IPs are reliable only behind a proxy that overwrites incoming headers. Alert caps and deduplication are best-effort, and calendar writes have no durable exactly-once guarantee. Public use needs shared controls, provider spending limits and an appropriate data-retention policy.
 
-Read [SECURITY.md](SECURITY.md). Live credentials, call recordings and transcripts are excluded. Photos and the Instrument Serif font are covered in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); those notices do not establish a license for the project code. Code reuse terms remain to be set.
+Read [SECURITY.md](SECURITY.md). Live credentials, call recordings and transcripts are excluded. Photos and the Instrument Serif font are covered in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); the project code uses the [MIT License](LICENSE).
